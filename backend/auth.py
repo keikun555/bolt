@@ -69,7 +69,9 @@ if __name__ == "__main__":
         input = raw_input
     username = input("username: ")
     password = getpass.getpass("password: ")
-    if check_credentials(username, password):
+    user = check_credentials(username, password)
+    if user is not None:
         print("ACCESS GRANTED")
+        print(user)
     else:
         print("ACCESS DENIED")

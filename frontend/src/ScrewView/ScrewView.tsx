@@ -1,1 +1,2 @@
-import 
+var x;
+export default x;
