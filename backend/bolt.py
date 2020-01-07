@@ -4,7 +4,9 @@ Kei Imada
 Bolt REST API
 '''
 
-from flask import flash, Flask, g, jsonify, request
+import os
+
+from flask import flash, Flask, g, jsonify, request, send_from_directory
 
 from flask_cors import CORS
 from flask_wtf.csrf import CSRFProtect
@@ -15,7 +17,7 @@ from BoltDB import BoltDB
 from forms import LoginForm
 
 # make and configure Flask App
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../frontend/build')
 # generated with `openssl rand -base64 32`
 app.secret_key = 'PzfQpZ38A9Vj+rewcgHUSDKk8QIaR/5ssnD1Yl/7va0='
 FlaskJSON(app)
@@ -37,6 +39,14 @@ def load_user(user_id):
     bdb = get_bdb()
     return bdb.get_user(user_id)
 
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    if path != "" and os.path.exists(app.static_folder + '/' + path):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, 'index.html')
+
 @app.route('/login', methods=['GET', 'POST'])
 @as_json
 def login():
@@ -44,7 +54,7 @@ def login():
     form.validate()
     response = {'errors': form.errors}
     if not form.errors:
-        # no errors
+	# no errors
         bdb = get_bdb()
         user = bdb.login(form.data.get('username'), form.data.get('password'))
         if user is None:
