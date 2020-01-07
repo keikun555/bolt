@@ -1,7 +1,7 @@
 /**
  ** Kei Imada
  ** 20200107
- ** Login Page for Bolt
+ ** Bolt Login Page
  */
 
 import * as React from 'react';
@@ -104,14 +104,6 @@ class BoltLogin extends React.Component<BoltLoginProps, BoltLoginState> {
           <Form.Button fluid primary>
             Login
           </Form.Button>
-          <div style={{float: 'left'}}>
-            <a
-              href="https://guts.sccs.swarthmore.edu/user/create/"
-              target="_blank"
-              rel="noopener noreferrer">
-              Register
-            </a>
-          </div>
           <div style={{float: 'right'}}>
             Forgot your{' '}
             <a
@@ -128,6 +120,14 @@ class BoltLogin extends React.Component<BoltLoginProps, BoltLoginState> {
               password
             </a>
             ?
+          </div>
+          <div>
+            <a
+              href="https://guts.sccs.swarthmore.edu/user/create/"
+              target="_blank"
+              rel="noopener noreferrer">
+              Register
+            </a>
           </div>
         </Form>
       </Container>

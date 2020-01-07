@@ -5,8 +5,10 @@
  */
 
 import * as React from 'react';
-import BoltLogin from './BoltLogin';
 
+import {Modal} from 'semantic-ui-react';
+
+import BoltLogin from './BoltLogin';
 import User from './user';
 
 export interface BoltProps {}
@@ -28,13 +30,17 @@ class Bolt extends React.Component<BoltProps, BoltState> {
   render() {
     const {user} = this.state;
     const {setUser} = this;
-    if (!user) {
-      // need login
-      return <BoltLogin setUser={setUser} />;
-    } else {
-      // logged in
-      return <p>logged in</p>;
-    }
+    console.log(user);
+    return (
+      <>
+        <Modal open={user ? false : true} size='tiny' dimmer="blurring">
+          <Modal.Content>
+            <BoltLogin setUser={setUser} />
+          </Modal.Content>
+        </Modal>
+        <p>logged in</p>
+      </>
+    );
   }
 }
 
