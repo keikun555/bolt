@@ -6,12 +6,14 @@
 
 import * as React from 'react';
 
-import {Container, Form, Header, Message} from 'semantic-ui-react';
+import {Container, Form, Header, Image, Message} from 'semantic-ui-react';
 
-import axios from './boltAxios';
+import axios, {tokenManager} from './boltAxios';
 import {AxiosResponse, AxiosError} from 'axios';
 
 import User from './user';
+
+import logo from './logo.png';
 
 export interface BoltLoginProps {
   setUser: (user: User) => void;
@@ -29,25 +31,52 @@ class BoltLogin extends React.Component<BoltLoginProps, BoltLoginState> {
     this.state = {
       username: '',
       password: '',
-      rememberMe: false,
+      rememberMe: true,
       errors: {},
     };
     this.handleLogin = this.handleLogin.bind(this);
+    if (tokenManager.getToken() || tokenManager.getRefreshToken()) {
+      // try logging in if we have tokens
+      // for remember me function
+      console.log('got tokens');
+      axios
+        .post('auth/login')
+        .then((response: AxiosResponse) => {
+          if(!response) {
+            console.log('clearing local tokens');
+            tokenManager.clearTokens();
+            return;
+          }
+          const data = response.data;
+          if ('user' in data) {
+            // got user!
+            this.props.setUser(data['user']);
+          }
+        })
+        .catch((error: AxiosError) => console.log(error));
+    }
   }
   handleLogin() {
-    const {errors, ...params} = this.state;
+    const {errors, rememberMe, ...form} = this.state;
+    // set remember me
+    tokenManager.setRememberMe(rememberMe);
+    // what to send in the login request
+    const formData = new FormData();
+    for (const [key, value] of Object.entries(form)) {
+      formData.append(key, value);
+    }
+    // create request
     axios
-      .get('login', {
-        params: params,
-      })
+      .post('auth/login', formData)
       .then((response: AxiosResponse) => {
         const data = response.data;
         if ('user' in data) {
-          // got token!
+          // got user!
           this.props.setUser(data['user']);
         } else {
           // got some errors
           this.setState({errors: data['errors']});
+          tokenManager.clearTokens();
         }
       })
       .catch((error: AxiosError) => console.log(error));
@@ -57,7 +86,11 @@ class BoltLogin extends React.Component<BoltLoginProps, BoltLoginState> {
     const {handleLogin} = this;
     return (
       <Container>
-        <Header as="h1">
+        <Image src={logo} size="tiny" centered />
+        <Header as="h1" textAlign="center">
+          Bolt
+        </Header>
+        <Header as="h3" textAlign="center">
           Login with your{' '}
           <a
             href="https://www.sccs.swarthmore.edu/"
