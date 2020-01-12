@@ -13,11 +13,11 @@ from flask_cors import CORS
 from flask_json import FlaskJSON, as_json
 
 from flask_jwt_extended import (
-        JWTManager,
+    JWTManager,
         jwt_required, jwt_optional, jwt_refresh_token_required,
         create_access_token, create_refresh_token,
         get_jwt_identity, get_raw_jwt,
-        )
+)
 
 from cachetools import TTLCache
 
@@ -30,9 +30,9 @@ app = Flask(__name__, static_folder='../frontend/build')
 TOKEN_EXPIRES = datetime.timedelta(minutes=15)
 # TOKEN_EXPIRES = datetime.timedelta(seconds=5)
 REFRESH_EXPIRES = datetime.timedelta(days=30)
+app.config['JWT_SECRET_KEY'] = 'PzfQpZ38A9Vj+rewcgHUSDKk8QIaR/5ssnD1Yl/7va0='
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = TOKEN_EXPIRES
 app.config['JWT_REFRESH_TOKEN_EXPIRES'] = REFRESH_EXPIRES
-app.config['JWT_SECRET_KEY'] = 'PzfQpZ38A9Vj+rewcgHUSDKk8QIaR/5ssnD1Yl/7va0='
 app.config['JWT_BLACKLIST_ENABLED'] = True
 app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access', 'refresh']
 FlaskJSON(app)
@@ -40,16 +40,20 @@ CORS(app)  # TODO remove for production
 jwt = JWTManager(app)
 
 # BoltDB
+
+
 def get_bdb():
     if 'bdb' not in g:
         g.bdb = BoltDB()
     return g.bdb
+
 
 @jwt.token_in_blacklist_loader
 def check_if_token_is_revoked(payload):
     jti = payload['jti']
     bdb = get_bdb()
     return bdb.token_revoked(jti)
+
 
 @app.route('/auth/login', methods=['POST'])
 @as_json
@@ -59,9 +63,9 @@ def login():
     if user_id:
         bdb = get_bdb()
         return {
-                'errors': {},
-                'user': bdb.get_user(user_id).__dict__
-                }, 200
+            'errors': {},
+                'user': bdb.get_user(user_id)
+        }, 200
     form = LoginForm(request.form, csrf_enabled=False)
     form.validate()
     response = {'errors': form.errors}
@@ -82,6 +86,7 @@ def login():
             bdb.add_token(refresh_token, app.config['JWT_IDENTITY_CLAIM'])
     return response, 200
 
+
 @app.route('/auth/refresh', methods=['POST'])
 @jwt_refresh_token_required
 @as_json
@@ -90,10 +95,11 @@ def refresh():
     user_id = get_jwt_identity()
     token = create_access_token(identity=user_id)
     response = {
-            'token': token
-            }
+        'token': token
+    }
     bdb.add_token(token, app.config['JWT_IDENTITY_CLAIM'])
     return response, 200
+
 
 @app.route("/auth/logout/1", methods=['DELETE'])
 @jwt_required
@@ -105,6 +111,7 @@ def logout():
     print('revoked token %s' % jti)
     return jsonify({"msg": "Successfully logged out (access)"}), 200
 
+
 @app.route("/auth/logout/2", methods=['DELETE'])
 @jwt_refresh_token_required
 def logout2():
@@ -115,17 +122,42 @@ def logout2():
     print('revoked token %s' % jti)
     return jsonify({"msg": "Successfully logged out (refresh)"}), 200
 
+
 @app.route('/user/<string:user_id>', methods=['POST'])
 @as_json
-@jwt_required
+# @jwt_required
 def get_user(user_id):
     bdb = get_bdb()
-    user = bdb.get_user(user_id)
+    try:
+        user = bdb.get_user(user_id)
+    except:
+        return {
+            'errors': {'user': 'not found'}
+        }, 404
     current_user_id = get_jwt_identity()
     if(user_id == current_user_id):
         print("same user!")
     print(user_id, current_user_id)
-    return user.__dict__, 200
+    return user, 200
+
+
+@app.route('/user', methods=['POST'])
+@as_json
+# @jwt_required
+def get_all_users():
+    bdb = get_bdb()
+    users = bdb.get_all_users()
+    return {'users': users}, 200
+
+
+@app.route('/match/<string:user_id>', methods=['POST'])
+@as_json
+# @jwt_required
+def get_match(user_id):
+    bdb = get_bdb()
+    match = bdb.get_match(user_id)
+    return {'match': match}, 200
+
 
 @app.route('/', defaults={'path': ''})
 def serve(path):

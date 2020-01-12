@@ -3,44 +3,48 @@ Kei Imada
 20200107
 Bolt Database Interface
 '''
+
 import pdb
 import datetime
 from contextlib import contextmanager
 import sqlalchemy as sql
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.sql import expression as expr
 
 from flask_login import UserMixin
 from flask_jwt_extended import decode_token
 
 from db.bolt import *
-from auth import check_credentials
+from ldap_auth import check_credentials
 
-class BoltUser(UserMixin):
-    ''' used for flask login '''
-    def __init__(self, user):
-        self.__dict__ = user
-        for key in user:
-            setattr(self, key, user[key])
+# TODO remove for production
+dummy_user = {
+    'uid': 'dummy',
+        'password': 'dummy',
+        'name': 'Dummy User',
+        'email': 'dummy@swarthmore.edu'
+}
 
-    def get_id(self):
-        return self.id
 
-    def __str__(self):
-        return 'User(id=%s)' % self.id
+def row2dict(row):
+    return dict((col, getattr(row, col)) for col in row.__table__.columns.keys())
+
 
 class BoltDB(object):
-    USERNAME='keikun'
-    PASSWORD='carpoolservice'
-    HOST='localhost'
-    DATABASENAME='bolt'
+    USERNAME = 'keikun'
+    PASSWORD = 'carpoolservice'
+    HOST = 'localhost'
+    DATABASENAME = 'bolt'
+
     def __init__(self, echo=False):
-        self.engine = create_engine('mysql://{}:{}@{}/{}'.format(self.USERNAME, self.PASSWORD, self.HOST, self.DATABASENAME), echo=echo)
+        self.engine = create_engine('mysql://{}:{}@{}/{}'.format(
+            self.USERNAME, self.PASSWORD, self.HOST, self.DATABASENAME), echo=echo)
         self._Session = sessionmaker(bind=self.engine)
 
     @contextmanager
     def Session(self):
-        """Provide a transactional scope around a series of operations."""
+        ''' Provide a transactional scope around a series of operations. '''
         session = self._Session()
         try:
             yield session
@@ -58,7 +62,8 @@ class BoltDB(object):
         user_id = decoded_token[identity_claim]
         expiration = datetime.datetime.fromtimestamp(decoded_token['exp'])
         with self.Session() as session:
-            token_row = Token(token=token, user_id=user_id, expiration=expiration)
+            token_row = Token(
+                token=token, user_id=user_id, expiration=expiration)
             session.add(token_row)
             session.commit()
 
@@ -66,9 +71,9 @@ class BoltDB(object):
         ''' checks whether token is revoked '''
         with self.Session() as session:
             query = (
-                    session.query(Token.revoked)
+                session.query(Token.revoked)
                     .filter(sql.and_(Token.token == token, Token.expiration >= datetime.datetime.now()))
-                    )
+            )
             results = query.all()
             if len(results) == 0:
                 # for safety reasons if its not in db, consider it revoked
@@ -84,9 +89,9 @@ class BoltDB(object):
         try:
             with self.Session() as session:
                 token = (
-                        session.query(Token)
+                    session.query(Token)
                         .filter(sql.and_(Token.token == token, Token.user_id == user_id))
-                        ).one()
+                ).one()
                 token.revoked = True
                 session.commit()
         except:
@@ -97,6 +102,9 @@ class BoltDB(object):
         given username and password, login and return user info else return None
         '''
         ldap_user = check_credentials(username, password)
+        # TODO remove for production
+        if username == dummy_user['uid'] and password == dummy_user['password']:
+            ldap_user = dummy_user
         if ldap_user is None:
             # failed
             return None
@@ -113,24 +121,290 @@ class BoltDB(object):
             user = query.first()
             if user is None:
                 # not in boltdb => add to boltdb
-                user = User(id_=id_, email=email, name=name)
+                user = User(id=id_, email=email, name=name)
                 session.add(user)
                 session.commit()
-            user_dict = dict((col, getattr(user, col)) for col in user.__table__.columns.keys())
-        return BoltUser(user_dict)
+            user_dict = row2dict(user)
+        return user_dict
 
-    def get_user(self, id_):
+    def get_user(self, user_id):
+        ''' returns dictionary of a user '''
         with self.Session() as session:
-            query = (session.query(User).filter(User.id == id_))
-            user = query.first()
-            user_dict = dict((col, getattr(user, col)) for col in user.__table__.columns.keys())
-        return BoltUser(user_dict)
+            d_subq1 = (
+                session.query(
+                    expr.func.max(Driver.id).label('id')
+                ).filter(sql.and_(
+                         Driver.screw == user_id,
+                         Driver.cancelled == expr.false()))
+                        .group_by(Driver.screw)
+                        .subquery()
+            )
+            d_subq = (
+                session.query(
+                    Driver.screw,
+                        Driver.driver
+                ).filter(Driver.id.in_(d_subq1))
+                    .subquery()
+            )
+            c_subq1 = (
+                session.query(
+                    expr.func.max(Couple.id).label('id')
+                ).filter(sql.and_(
+                         Couple.user_1 == user_id,
+                         Couple.cancelled == expr.false()))
+                        .group_by(Couple.user_1)  # trick is to add both (u1, u2) (u2, u1) pairs
+                        .subquery()
+            )
+            c_subq = (
+                session.query(
+                    Couple.user_1,
+                        Couple.user_2
+                ).filter(Couple.id.in_(c_subq1))
+                    .subquery()
+            )
+            query = (
+                session.query(
+                    User,
+                        d_subq.c.driver,
+                        c_subq.c.user_2
+                ).outerjoin(
+                    d_subq, User.id == d_subq.c.screw
+                ).outerjoin(
+                    c_subq, User.id == c_subq.c.user_1
+                ).filter(User.id == user_id)
+            )
+            user, driver, match = query.first()
+            user_dict = row2dict(user)
+            user_dict['driver'] = driver
+            user_dict['matched'] = match is not None
+        return user_dict
 
-if __name__ == '__main__':
-    import getpass, sys
+    def get_all_users(self):
+        ''' returns list of dictionaries '''
+        with self.Session() as session:
+            d_subq1 = (
+                session.query(
+                    expr.func.max(Driver.id).label('id')
+                ).filter(Driver.cancelled == expr.false())
+                    .group_by(Driver.screw)
+                    .subquery()
+            )
+            d_subq = (
+                session.query(
+                    Driver.screw,
+                        Driver.driver
+                ).filter(Driver.id.in_(d_subq1))
+                    .subquery()
+            )
+            c_subq1 = (
+                session.query(
+                    expr.func.max(Couple.id).label('id')
+                ).filter(Couple.cancelled == expr.false())
+                    .group_by(Couple.user_1)  # trick is to add both (u1, u2) (u2, u1) pairs
+                    .subquery()
+            )
+            c_subq = (
+                session.query(
+                    Couple.user_1,
+                        Couple.user_2
+                ).filter(Couple.id.in_(c_subq1))
+                    .subquery()
+            )
+            query = (
+                session.query(
+                    User,
+                        d_subq.c.driver,
+                        c_subq.c.user_2
+                ).outerjoin(
+                    d_subq, User.id == d_subq.c.screw
+                ).outerjoin(
+                    c_subq, User.id == c_subq.c.user_1
+                )
+            )
+            users = []
+            for user, driver, match in query.all():
+                user_dict = row2dict(user)
+                user_dict['driver'] = driver
+                user_dict['matched'] = match is not None
+                users.append(user_dict)
+        return users
+
+    def set_driver_request(self, screw, driver):
+        ''' given screw user id and driver user id registers a driver request '''
+        if screw == driver:
+            raise Exception(
+                'BoltDB.set_driver_request: a screw cannot be its own driver!')
+        with self.Session() as session:
+            driver_request = DriverRequest(screw=screw, driver=driver)
+            session.add(driver_request)
+            session.commit()
+
+    def get_requested_driver(self, screw):
+        ''' get requested driver of screw else return None '''
+        with self.Session() as session:
+            subq = (
+                session.query(
+                    expr.func.max(DriverRequest.id).label('id')
+                ).filter(
+                    sql.and_(
+                        DriverRequest.screw == screw,
+                        DriverRequest.cancelled == expr.false())
+                ).subquery()
+            )
+            query = session.query(DriverRequest.driver).filter(
+                DriverRequest.id.in_(subq))
+            driver = query.first()
+            if driver is not None:
+                driver, = driver  # need a comma because this returns (match,)
+        return driver
+
+    def approve_driver_request(self, screw, driver):
+        ''' approve a driver request '''
+        with self.Session() as session:
+            subq = (
+                session.query(
+                    expr.func.max(DriverRequest.id).label('id')
+                ).filter(
+                    sql.and_(
+                        DriverRequest.screw == screw,
+                        DriverRequest.driver == driver,
+                        DriverRequest.cancelled == expr.false())
+                ).subquery()
+            )
+            query = session.query(DriverRequest).filter(
+                DriverRequest.id.in_(subq))
+            request = query.first()
+            if request is None:
+                raise Exception('BoltDB.approve_driver_request: request not found')
+            request.approved = True
+            screwdriver = Driver(screw=screw, driver=driver)
+            session.add(screwdriver)
+            session.commit()
+        self.cancel_driver_request(screw, driver) # approved requests are also cancelled
+
+    def cancel_driver_request(self, screw, driver):
+        ''' given screw user id and driver user id cancels a driver request '''
+        if screw == driver:
+            raise Exception(
+                'BoltDB.cancel_driver_request: a screw cannot be its own driver!')
+        with self.Session() as session:
+            query = (
+                session.query(DriverRequest).filter(
+                    sql.and_(
+                        DriverRequest.screw == screw,
+                            DriverRequest.driver == driver,
+                            DriverRequest.cancelled == expr.false()
+                    )
+                )
+            )
+            if len(query.all()) == 0:
+                raise Exception(
+                    'BoltDB.cancel_driver_request: request not found')
+            for request in query.all():
+                request.cancelled = True
+            session.commit()
+
+    def set_match(self, user_1, user_2):
+        ''' add a match '''
+        if user_1 == user_2:
+            raise Exception(
+                'BoltDB.set_match: users cannot match with themselves')
+        with self.Session() as session:
+            # check if one is already matched
+            # we do this because matches are important enough
+            # to go the extra mile to prevent them being overwritten
+            query = (
+                session.query(Couple.id)
+                .filter(
+                    sql.or_(
+                        sql.and_(
+                            Couple.user_1 == user_1,
+                            Couple.cancelled == expr.false(
+                            )),
+                        sql.and_(
+                            Couple.user_1 == user_2,
+                            Couple.cancelled == expr.false())
+                    )
+                )
+            )
+            match = query.first()
+            if match is not None:
+                raise Exception(
+                    'BoltDB.set_match: a user in this match is already matched with someone else (match id {})'.format(match[0]))
+            matches = [
+                Couple(user_1=user_1, user_2=user_2),
+                    Couple(user_1=user_2, user_2=user_1)
+            ]
+            session.bulk_save_objects(matches)
+            session.commit()
+
+    def get_match(self, user_id):
+        ''' get the match of user if exists else return None '''
+        with self.Session() as session:
+            subq = (
+                session.query(
+                    expr.func.max(Couple.id).label('id')
+                ).filter(
+                    sql.and_(
+                        Couple.user_1 == user_id,
+                        Couple.cancelled == expr.false())
+                ).subquery()
+            )
+            query = session.query(Couple.user_2).filter(Couple.id.in_(subq))
+            match = query.first()
+            if match is not None:
+                match, = match  # need a comma because this returns (match,)
+        return match
+
+    def cancel_match(self, user_1, user_2):
+        ''' cancel a match '''
+        with self.Session() as session:
+            subq = (
+                session.query(
+                    expr.func.max(Couple.id).label('id')
+                ).filter(sql.or_(
+                         sql.and_(
+                         Couple.user_1 == user_1,
+                         Couple.user_2 == user_2,
+                         Couple.cancelled == expr.false()),
+                         sql.and_(
+                         Couple.user_1 == user_2,
+                         Couple.user_2 == user_1,
+                         Couple.cancelled == expr.false())
+                         ))
+                    .group_by(Couple.user_1, Couple.user_2)
+                    .subquery()
+            )
+            query = session.query(Couple).filter(Couple.id.in_(subq))
+            if len(query.all()) == 0:
+                raise Exception('BoltDB.cancel_match: match not found')
+            elif len(query.all()) != 2:
+                raise Exception('BoltDB.cancel_match: match table corrupted')
+            for couple in query.all():
+                couple.cancelled = True
+            session.commit()
+
+
+def main_login():
+    import getpass
+    import sys
     if sys.version_info < (3, 0):
         input = raw_input
-    username = input("username: ")
-    password = getpass.getpass("password: ")
+    username = input('username: ')
+    password = getpass.getpass('password: ')
     BDB = BoltDB()
     print(BDB.login(username, password))
+
+
+def main_match():
+    BDB = BoltDB()
+    BDB.cancel_match('keikun', 'dummy')
+
+
+def main_driver():
+    BDB = BoltDB()
+    BDB.set_driver_request('keikun', 'dummy')
+    BDB.approve_driver_request('keikun', 'dummy')
+
+if __name__ == '__main__':
+    main_driver()
