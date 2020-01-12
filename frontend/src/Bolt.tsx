@@ -9,7 +9,7 @@ import * as React from 'react';
 
 import {Image, Menu, Modal} from 'semantic-ui-react';
 
-import axios, {tokenManager} from './boltAxios';
+import axios, {tokenManager, createAxiosResponseInterceptor} from './boltAxios';
 import {AxiosResponse, AxiosError} from 'axios';
 
 import BoltLogin from './BoltLogin';
@@ -32,9 +32,14 @@ class Bolt extends React.Component<BoltProps, BoltState> {
       user: null,
       activeItem: '',
     };
+    this.logout = this.logout.bind(this);
     this.setUser = this.setUser.bind(this);
     this.userMenu = this.userMenu.bind(this);
     this.handleItemClick = this.handleItemClick.bind(this);
+    createAxiosResponseInterceptor(this.logout);
+  }
+  logout() {
+    this.setState({user: null})
   }
   setUser(user: User) {
     this.setState({user, activeItem: user.id});

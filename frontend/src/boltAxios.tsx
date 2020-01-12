@@ -6,6 +6,8 @@
 
 import {AxiosResponse, AxiosError} from 'axios';
 
+import User from './user';
+
 const axios = require('axios').default.create({
   baseURL: 'http://127.0.0.1:5000/',
   timeout: 5000,
@@ -50,9 +52,7 @@ function TokenManager() {
   }
   function refreshToken() {
     if (!refreshToken_) {
-      return new Promise((resolve, reject) => {
-        reject();
-      });
+      return Promise.reject();
     }
     return axios.post(refreshTokenUrl);
   }
@@ -84,43 +84,52 @@ axios.interceptors.request.use((request: any) => {
   return request;
 });
 
-axios.interceptors.response.use(
-  (response: AxiosResponse) => {
-    if (response.data.token) {
-      // update token
-      tokenManager.setToken(response.data.token);
-    }
-    if (response.data.refreshToken) {
-      // update refresh token
-      tokenManager.setRefreshToken(response.data.refreshToken);
-    }
-    console.log('Response:', response);
-    return response;
-  },
-  (error: AxiosError) => {
-    if (error.response && error.response.status !== 401) {
-      // if not unauthorized (not refresh) reject with same error
-      return new Promise((resolve, reject) => {
-        reject(error);
-      });
-    }
-    if (error.config.url && error.config.url.includes(refreshTokenUrl)) {
-      // if refresh failed, then just reject
-      console.log('refresh failed')
-      return Promise.reject(error);
-    }
-    // refresh token
-    console.log('token expired, refreshing...');
-    return tokenManager
-      .refreshToken()
-      .then((response: AxiosResponse) => {
-        // make the original request with refreshed token
-        return axios.request(error.config);
-      })
-      .catch((error: AxiosError) => {
-        Promise.reject(error);
-      });
-  },
-);
+export function createAxiosResponseInterceptor(logout: () => void) {
+  const interceptor = axios.interceptors.response.use(
+    (response: AxiosResponse) => {
+      if (response.data.token) {
+        // update token
+        tokenManager.setToken(response.data.token);
+      }
+      if (response.data.refreshToken) {
+        // update refresh token
+        tokenManager.setRefreshToken(response.data.refreshToken);
+      }
+      console.log('Response:', response);
+      return response;
+    },
+    (error: AxiosError) => {
+      console.log('Error:', error);
+      if (error.response && error.response.status !== 401) {
+        // if not unauthorized (not refresh) reject with same error
+        return Promise.reject(error);
+      }
+      // refresh token
+      // eject interceptor to stop looping if refresh is 401
+      axios.interceptors.response.eject(interceptor);
+      console.log('token expired, refreshing...');
+      return tokenManager
+        .refreshToken()
+        .then((response: AxiosResponse) => {
+          // make the original request with refreshed token
+          if (response.data.token) {
+            // update token
+            tokenManager.setToken(response.data.token);
+            console.log('refresh token successful');
+          }
+          return axios(error.response!.config);
+        })
+        .catch((error: AxiosError) => {
+          // failed to refresh, logging out
+          console.log('token refresh failed, logging out...');
+          tokenManager.clearTokens();
+          console.log(logout);
+          logout();
+          return Promise.reject(error);
+        })
+      .finally(createAxiosResponseInterceptor);
+    },
+  );
+}
 
 export default axios;

@@ -38,22 +38,17 @@ class BoltLogin extends React.Component<BoltLoginProps, BoltLoginState> {
     if (tokenManager.getToken() || tokenManager.getRefreshToken()) {
       // try logging in if we have tokens
       // for remember me function
-      console.log('got tokens');
+      console.log('cached tokens');
       axios
         .post('auth/login')
         .then((response: AxiosResponse) => {
-          if(!response) {
-            console.log('clearing local tokens');
-            tokenManager.clearTokens();
-            return;
-          }
           const data = response.data;
           if ('user' in data) {
             // got user!
             this.props.setUser(data['user']);
           }
         })
-        .catch((error: AxiosError) => console.log(error));
+        .catch((error: AxiosError) => console.log('cached token failed'));
     }
   }
   handleLogin() {
