@@ -6,8 +6,6 @@
 
 import {AxiosResponse, AxiosError} from 'axios';
 
-import User from './user';
-
 const axios = require('axios').default.create({
   baseURL: 'http://127.0.0.1:5000/',
   timeout: 5000,
@@ -99,7 +97,7 @@ export function createAxiosResponseInterceptor(logout: () => void) {
       return response;
     },
     (error: AxiosError) => {
-      console.log('Error:', error);
+      console.log('Error:', error.response);
       if (error.response && error.response.status !== 401) {
         // if not unauthorized (not refresh) reject with same error
         return Promise.reject(error);
