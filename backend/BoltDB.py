@@ -130,22 +130,7 @@ class BoltDB(object):
     def get_user(self, user_id):
         ''' returns dictionary of a user '''
         with self.Session() as session:
-            d_subq1 = (
-                session.query(
-                    expr.func.max(Driver.id).label('id')
-                ).filter(sql.and_(
-                         Driver.screw == user_id,
-                         Driver.cancelled == expr.false()))
-                        .group_by(Driver.screw)
-                        .subquery()
-            )
-            d_subq = (
-                session.query(
-                    Driver.screw,
-                        Driver.driver
-                ).filter(Driver.id.in_(d_subq1))
-                    .subquery()
-            )
+            # match
             c_subq1 = (
                 session.query(
                     expr.func.max(Couple.id).label('id')
@@ -158,30 +143,27 @@ class BoltDB(object):
             c_subq = (
                 session.query(
                     Couple.user_1,
-                        Couple.user_2
+                    Couple.user_2
                 ).filter(Couple.id.in_(c_subq1))
                     .subquery()
             )
             query = (
                 session.query(
                     User,
-                        d_subq.c.driver,
-                        c_subq.c.user_2
-                ).outerjoin(
-                    d_subq, User.id == d_subq.c.screw
+                    c_subq.c.user_2
                 ).outerjoin(
                     c_subq, User.id == c_subq.c.user_1
                 ).filter(User.id == user_id)
             )
-            user, driver, match = query.first()
+            user, match = query.first()
             user_dict = row2dict(user)
-            user_dict['driver'] = driver
             user_dict['matched'] = match is not None
         return user_dict
 
     def get_all_users(self):
         ''' returns list of dictionaries '''
         with self.Session() as session:
+            # driver
             d_subq1 = (
                 session.query(
                     expr.func.max(Driver.id).label('id')
@@ -196,6 +178,7 @@ class BoltDB(object):
                 ).filter(Driver.id.in_(d_subq1))
                     .subquery()
             )
+            # match
             c_subq1 = (
                 session.query(
                     expr.func.max(Couple.id).label('id')
@@ -229,18 +212,76 @@ class BoltDB(object):
                 users.append(user_dict)
         return users
 
-    def set_driver_request(self, screw, driver):
-        ''' given screw user id and driver user id registers a driver request '''
+    def make_driver_request(self, screw, driver):
+        '''
+        given screw user id and driver user id registers a driver request
+
+        return: newly created driver request
+        '''
         if screw == driver:
             raise Exception(
                 'BoltDB.set_driver_request: a screw cannot be its own driver!')
+        if self.get_requested_driver(screw) is not None:
+            raise Exception(
+                'BoltDB.set_driver_request: screw (%s) already has a driver request!' % screw)
         with self.Session() as session:
             driver_request = DriverRequest(screw=screw, driver=driver)
             session.add(driver_request)
+            session.flush()
+            driver_request_dict = row2dict(driver_request)
+            driver_request_dict['screw'] = self.get_user(
+                driver_request_dict['screw'])
+            driver_request_dict['driver'] = self.get_user(
+                driver_request_dict['driver'])
             session.commit()
+        return driver_request_dict
+
+    def get_driver_request(self, request_id):
+        ''' given request id returns request '''
+        with self.Session() as session:
+            query = session.query(DriverRequest).filter(
+                sql.and_(
+                    DriverRequest.id == request_id,
+                    DriverRequest.active == expr.true()
+                )
+            )
+            request = query.first()
+            if request is None:
+                raise Exception(
+                    'BoltDB.get_driver_request: request not found')
+            request = request
+            request_dict = row2dict(request)
+            request_dict['screw'] = self.get_user(request_dict['screw'])
+            request_dict['driver'] = self.get_user(request_dict['driver'])
+        return request_dict
+
+    def user_associated_driver_requests(self, user_id):
+        ''' given user id return all driver request associated with the user '''
+        with self.Session() as session:
+            query = session.query(DriverRequest).filter(
+                sql.and_(
+                    sql.or_(
+                        DriverRequest.screw == user_id,
+                        DriverRequest.driver == user_id
+                    ),
+                    DriverRequest.active == expr.true()
+                )
+            )
+            request_dicts = []
+            for request in query.all():
+                r_dict = row2dict(request)
+                r_dict['screw'] = self.get_user(r_dict['screw'])
+                r_dict['driver'] = self.get_user(r_dict['driver'])
+                request_dicts.append(r_dict)
+        return request_dicts
 
     def get_requested_driver(self, screw):
-        ''' get requested driver of screw else return None '''
+        '''
+        get requested driver of screw else return None
+        useful to check if a screw has an active driver request
+
+        return: user dict or None
+        '''
         with self.Session() as session:
             subq = (
                 session.query(
@@ -248,60 +289,78 @@ class BoltDB(object):
                 ).filter(
                     sql.and_(
                         DriverRequest.screw == screw,
-                        DriverRequest.cancelled == expr.false())
+                        DriverRequest.active == expr.true())
                 ).subquery()
             )
             query = session.query(DriverRequest.driver).filter(
                 DriverRequest.id.in_(subq))
             driver = query.first()
+            driver_dict = None
             if driver is not None:
                 driver, = driver  # need a comma because this returns (match,)
-        return driver
+                driver_dict = self.get_user(driver)
+        return driver_dict
 
-    def approve_driver_request(self, screw, driver):
-        ''' approve a driver request '''
+    def approve_driver_request(self, request_id):
+        ''' given request id approve a driver request '''
+        with self.Session() as session:
+            query = session.query(DriverRequest).filter(
+                DriverRequest.id == request_id)
+            request = query.first()
+            if request is None:
+                raise Exception(
+                    'BoltDB.approve_driver_request: request not found')
+            request.active = False
+            screwdriver = Driver(screw=request.screw, driver=request.driver)
+            session.add(screwdriver)
+            session.commit()
+
+    def cancel_driver_request(self, request_id):
+        ''' given screw user id and driver user id cancels a driver request '''
+        with self.Session() as session:
+            query = session.query(DriverRequest).filter(
+                DriverRequest.id == request_id)
+            request = query.first()
+            if request is None:
+                raise Exception(
+                    'BoltDB.cancel_driver_request: request not found')
+            request.active = False
+            session.commit()
+
+    def get_driver(self, screw):
+        ''' get driver of screw else return None '''
         with self.Session() as session:
             subq = (
                 session.query(
-                    expr.func.max(DriverRequest.id).label('id')
+                    expr.func.max(Driver.id).label('id')
                 ).filter(
                     sql.and_(
-                        DriverRequest.screw == screw,
-                        DriverRequest.driver == driver,
-                        DriverRequest.cancelled == expr.false())
+                        Driver.screw == screw,
+                        Driver.cancelled == expr.false()
+                    )
                 ).subquery()
             )
-            query = session.query(DriverRequest).filter(
-                DriverRequest.id.in_(subq))
-            request = query.first()
-            if request is None:
-                raise Exception('BoltDB.approve_driver_request: request not found')
-            request.approved = True
-            screwdriver = Driver(screw=screw, driver=driver)
-            session.add(screwdriver)
-            session.commit()
-        self.cancel_driver_request(screw, driver) # approved requests are also cancelled
+            query = session.query(Driver.driver).filter(Driver.id.in_(subq))
+            driver = query.first()
+            driver_dict = None
+            if driver is not None:
+                driver, = driver
+                driver_dict = self.get_user(driver)
+        return driver_dict
 
-    def cancel_driver_request(self, screw, driver):
-        ''' given screw user id and driver user id cancels a driver request '''
-        if screw == driver:
-            raise Exception(
-                'BoltDB.cancel_driver_request: a screw cannot be its own driver!')
+    def cancel_driver(self, screw):
+        ''' cancel driver of screw '''
         with self.Session() as session:
             query = (
-                session.query(DriverRequest).filter(
+                session.query(Driver).filter(
                     sql.and_(
-                        DriverRequest.screw == screw,
-                            DriverRequest.driver == driver,
-                            DriverRequest.cancelled == expr.false()
+                        Driver.screw == screw,
+                        Driver.cancelled == expr.false()
                     )
                 )
             )
-            if len(query.all()) == 0:
-                raise Exception(
-                    'BoltDB.cancel_driver_request: request not found')
-            for request in query.all():
-                request.cancelled = True
+            for driver in query.all():
+                driver.cancelled = True
             session.commit()
 
     def set_match(self, user_1, user_2):
@@ -403,7 +462,7 @@ def main_match():
 
 def main_driver():
     BDB = BoltDB()
-    BDB.set_driver_request('keikun', 'dummy')
+    BDB.make_driver_request('keikun', 'dummy')
     BDB.approve_driver_request('keikun', 'dummy')
 
 if __name__ == '__main__':

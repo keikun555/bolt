@@ -54,8 +54,7 @@ class DriverRequest(Base):
     id = Column(INTEGER(11), primary_key=True)
     screw = Column(ForeignKey('user.id'), nullable=False, index=True, comment='user id')
     driver = Column(ForeignKey('user.id'), nullable=False, index=True, comment='user id')
-    approved = Column(TINYINT(1), nullable=False, server_default=text("'0'"))
-    cancelled = Column(TINYINT(1), nullable=False, server_default=text("'0'"))
+    active = Column(TINYINT(1), nullable=False, server_default=text("'1'"))
     timestamp = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
 
     user = relationship('User', primaryjoin='DriverRequest.driver == User.id')
@@ -65,10 +64,10 @@ class DriverRequest(Base):
 class Token(Base):
     __tablename__ = 'token'
     __table_args__ = (
-        Index('token_2', 'token', 'user_id'),
         Index('token_4', 'token', 'expiration'),
         Index('id', 'id', 'token'),
-        Index('token', 'token', 'user_id')
+        Index('token', 'token', 'user_id'),
+        Index('token_2', 'token', 'user_id')
     )
 
     id = Column(INTEGER(11), primary_key=True)
