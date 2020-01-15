@@ -65,7 +65,7 @@ def login():
             'errors': {},
                 'user': bdb.get_user(user_id)
         }, 200
-    form = LoginForm(request.form, csrf_enabled=False)
+    form = LoginForm(request.form)
     form.validate()
     response = {'errors': form.errors}
     if not form.errors:
@@ -214,7 +214,7 @@ def get_all_users():
 @as_json
 @jwt_required
 def make_driver_request():
-    form = DriverRequestForm(request.form, csrf_enabled=False)
+    form = DriverRequestForm(request.form)
     form.validate()
     response = {'errors': form.errors}
     if not form.errors:
