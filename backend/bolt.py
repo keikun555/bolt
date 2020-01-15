@@ -40,14 +40,6 @@ CORS(app)  # TODO remove for production
 jwt = JWTManager(app)
 
 
-@app.route('/', defaults={'path': ''})
-def serve(path):
-    if path != "" and os.path.exists(app.static_folder + '/' + path):
-        return send_from_directory(app.static_folder, path)
-    else:
-        return send_from_directory(app.static_folder, 'index.html')
-
-
 def get_bdb():
     # BoltDB
     if 'bdb' not in g:
@@ -323,6 +315,15 @@ def get_match(user_id):
     bdb = get_bdb()
     match = bdb.get_match(user_id)
     return {'match': match}, 200
+
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve(path):
+    if path != "" and os.path.exists(app.static_folder + '/' + path):
+        return send_from_directory(app.static_folder, path)
+    else:
+        return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=5000)
