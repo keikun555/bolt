@@ -22,7 +22,7 @@ from flask_jwt_extended import (
 from cachetools import TTLCache
 
 from BoltDB import BoltDB
-from forms import LoginForm
+from forms import LoginForm, DriverRequestForm
 
 # make and configure Flask App
 app = Flask(__name__, static_folder='../frontend/build')
@@ -216,6 +216,30 @@ def get_all_users():
     bdb = get_bdb()
     users = bdb.get_all_users()
     return {'users': users}, 200
+
+
+@app.route('/driver_request/make', methods=['POST'])
+@as_json
+@jwt_required
+def make_driver_request():
+    form = DriverRequestForm(request.form, csrf_enabled=False)
+    form.validate()
+    response = {'errors': form.errors}
+    if not form.errors:
+        bdb = get_bdb()
+        user_id = get_jwt_identity()
+        if user_id != form.data.get('screw'):
+            # only the screw can make the request
+            return {
+                'errors': {'driver_request': 'forbidden'}
+            }, 403
+        try:
+            driver_request = bdb.make_driver_request(form.data.get('screw'), form.data.get('driver'))
+        except Exception as e:
+            return {
+                'errors': {'new_driver_request': str(e)}
+            }, 404
+    return driver_request, 200
 
 
 @app.route('/driver_request/<int:request_id>', methods=['POST'])

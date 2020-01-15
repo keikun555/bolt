@@ -8,6 +8,8 @@ interface User {
   id: string;
   email: string;
   name: string;
+  driver: User | null;
+  matched: boolean;
 }
 
 export default User;

@@ -207,7 +207,7 @@ class BoltDB(object):
             users = []
             for user, driver, match in query.all():
                 user_dict = row2dict(user)
-                user_dict['driver'] = driver
+                user_dict['driver'] = None if driver is None else self.get_user(driver)
                 user_dict['matched'] = match is not None
                 users.append(user_dict)
         return users
