@@ -12,7 +12,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import expression as expr
 
-from flask_login import UserMixin
 from flask_jwt_extended import decode_token
 
 from db.bolt import *
