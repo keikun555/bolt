@@ -12,6 +12,7 @@ import {
   Grid,
   Header,
   Icon,
+  Message,
   Segment,
 } from 'semantic-ui-react';
 
@@ -65,6 +66,7 @@ export interface ScrewViewState {
   driver: User | null;
   driverRequests: DriverRequest[];
   matched: boolean;
+  errors: {[key: string]: string};
 }
 
 class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
@@ -76,6 +78,7 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
       driver: null,
       matched: false,
       driverRequests: [],
+      errors: {},
     };
     this.getData = this.getData.bind(this);
     this.getUsers = this.getUsers.bind(this);
@@ -121,6 +124,11 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
     axios
       .post('driver_request/make', formData)
       .then((response: AxiosResponse) => {
+        if ('errors' in response.data) {
+          this.setState(({errors}) => ({
+            errors: Object.assign({}, errors, response.data.errors),
+          }));
+        }
         this.getData();
       })
       .catch((error: AxiosError) => console.log(error));
@@ -164,7 +172,7 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
   }
   render() {
     const {user} = this.props;
-    const {driver, matched, driverRequests, users, selectedUser} = this.state;
+    const {driver, matched, driverRequests, users, selectedUser, errors} = this.state;
     const userRows = users.map((u: User) =>
       Object.assign({}, u, {driver: u.driver ? u.driver.id : 'None'}),
     );
@@ -177,7 +185,7 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
               <Grid verticalAlign="middle" columns={1}>
                 <Grid.Row>
                   <Grid.Column>
-                    <Header as="h3">
+                    <Header as="h2">
                       You have requested {`${r.driver.name} (${r.driver.id})`}{' '}
                       to be your driver!
                       <Button
@@ -199,7 +207,7 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
               <Grid verticalAlign="middle" columns={1}>
                 <Grid.Row>
                   <Grid.Column>
-                    <Header as="h3">
+                    <Header as="h2">
                       {`${r.driver.name} (${r.driver.id}) wants you to be their driver!`}
                       <Button.Group compact floated="right">
                         <Button onClick={() => this.approveDriverRequest(r)}>
@@ -295,6 +303,7 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
               </Button>
             </Grid.Column>
             <Grid.Column width={16}>
+              {errors.make_driver_request ? <Message error>{errors.make_driver_request}</Message> : null}
               <Button
                 disabled={
                   selectedUser && selectedUser.id !== user.id ? false : true

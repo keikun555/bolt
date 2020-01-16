@@ -26,6 +26,18 @@ dummy_user = {
 }
 
 
+class BoltException(Exception):
+    pass
+
+
+class NotFoundException(BoltException):
+    pass
+
+
+class NotUniqueException(BoltException):
+    pass
+
+
 def row2dict(row):
     return dict((col, getattr(row, col)) for col in row.__table__.columns.keys())
 
@@ -94,7 +106,7 @@ class BoltDB(object):
                 token.revoked = True
                 session.commit()
         except:
-            raise Exception('BoltDB.revoke_token: token not found')
+            raise NotFoundException('BoltDB.revoke_token: token not found')
 
     def login(self, username, password):
         '''
@@ -206,7 +218,8 @@ class BoltDB(object):
             users = []
             for user, driver, match in query.all():
                 user_dict = row2dict(user)
-                user_dict['driver'] = None if driver is None else self.get_user(driver)
+                user_dict[
+                    'driver'] = None if driver is None else self.get_user(driver)
                 user_dict['matched'] = match is not None
                 users.append(user_dict)
         return users
@@ -221,7 +234,7 @@ class BoltDB(object):
             raise Exception(
                 'BoltDB.set_driver_request: a screw cannot be its own driver!')
         if self.get_requested_driver(screw) is not None:
-            raise Exception(
+            raise NotUniqueException(
                 'BoltDB.set_driver_request: screw (%s) already has a driver request!' % screw)
         with self.Session() as session:
             driver_request = DriverRequest(screw=screw, driver=driver)
@@ -246,7 +259,7 @@ class BoltDB(object):
             )
             request = query.first()
             if request is None:
-                raise Exception(
+                raise NotFoundException(
                     'BoltDB.get_driver_request: request not found')
             request = request
             request_dict = row2dict(request)
@@ -307,7 +320,7 @@ class BoltDB(object):
                 DriverRequest.id == request_id)
             request = query.first()
             if request is None:
-                raise Exception(
+                raise NotFoundException(
                     'BoltDB.approve_driver_request: request not found')
             request.active = False
             screwdriver = Driver(screw=request.screw, driver=request.driver)
@@ -321,7 +334,7 @@ class BoltDB(object):
                 DriverRequest.id == request_id)
             request = query.first()
             if request is None:
-                raise Exception(
+                raise NotFoundException(
                     'BoltDB.cancel_driver_request: request not found')
             request.active = False
             session.commit()
@@ -387,7 +400,7 @@ class BoltDB(object):
             )
             match = query.first()
             if match is not None:
-                raise Exception(
+                raise NotUniqueException(
                     'BoltDB.set_match: a user in this match is already matched with someone else (match id {})'.format(match[0]))
             matches = [
                 Couple(user_1=user_1, user_2=user_2),
@@ -435,7 +448,7 @@ class BoltDB(object):
             )
             query = session.query(Couple).filter(Couple.id.in_(subq))
             if len(query.all()) == 0:
-                raise Exception('BoltDB.cancel_match: match not found')
+                raise NotFoundException('BoltDB.cancel_match: match not found')
             elif len(query.all()) != 2:
                 raise Exception('BoltDB.cancel_match: match table corrupted')
             for couple in query.all():

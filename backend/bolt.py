@@ -19,7 +19,7 @@ from flask_jwt_extended import (
         get_jwt_identity, get_raw_jwt,
 )
 
-from BoltDB import BoltDB
+from BoltDB import BoltDB, NotFoundException, NotUniqueException
 from forms import LoginForm, DriverRequestForm
 
 # make and configure Flask App
@@ -128,6 +128,10 @@ def get_user(user_id):
     bdb = get_bdb()
     try:
         user = bdb.get_user(user_id)
+    except NotFoundException as e:
+        return {
+            'errors': {'user': 'not found'}
+        }, 404
     except Exception as e:
         return {
             'errors': {'user': str(e)}
@@ -173,6 +177,10 @@ def get_driver(user_id):
     bdb = get_bdb()
     try:
         driver = bdb.get_driver(user_id)
+    except NotFoundException as e:
+        return {
+            'errors': {'driver': 'not found'}
+        }, 404
     except Exception as e:
         return {
             'errors': {'get_driver': str(e)}
@@ -225,11 +233,13 @@ def make_driver_request():
             }, 403
         try:
             driver_request = bdb.make_driver_request(form.data.get('screw'), form.data.get('driver'))
+        except NotUniqueException as e:
+            response['errors']['make_driver_request'] = 'You cannot have more than one driver request!'
         except Exception as e:
             return {
                 'errors': {'new_driver_request': str(e)}
             }, 404
-    return driver_request, 200
+    return response, 200
 
 
 @app.route('/driver_request/<int:request_id>', methods=['POST'])
