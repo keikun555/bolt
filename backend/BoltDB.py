@@ -578,10 +578,14 @@ class BoltDB(object):
                         Couple.active == expr.true())
                 ).subquery()
             )
-            query = session.query(Couple.user_2).filter(Couple.id.in_(subq))
+            query = (
+                session.query(User)
+                    .join(Couple.user_2 == User.id)
+                    .filter(Couple.id.in_(subq))
+            )
             match = query.first()
             if match is not None:
-                match, = match  # need a comma because this returns (match,)
+                match = row2dict(match)  # need a comma because this returns (match,)
         return match
 
     def cancel_match(self, user_1, user_2):
