@@ -281,7 +281,7 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
                           {screw.matched
                             ? `matched${
                                 screw.match
-                                  ? ` with ${screw.match.name} ${screw.match.id}`
+                                  ? ` with ${screw.match.name} (${screw.match.id})`
                                   : null
                               }!`
                             : 'not matched'}
