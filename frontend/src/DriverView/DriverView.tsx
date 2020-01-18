@@ -250,7 +250,7 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
     const savedRows = preferences.map((u: User) =>
       Object.assign({}, u, {
         driver: u.driver ? u.driver.id : 'None',
-        matched: u.matched ? 'Yes &hearts;' : 'Nope',
+        matched: u.matched ? `Yes ${'\u2764'}` : 'Nope',
       }),
     );
     const savedUsers = preferences.map((u: User) => u.id);
@@ -259,7 +259,7 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
       .map(u =>
         Object.assign({}, u, {
           driver: u.driver ? u.driver.id : 'None',
-          matched: u.matched ? 'Yes &hearts;' : 'Nope',
+          matched: u.matched ? `Yes ${'\u2764'}` : 'Nope',
         }),
       );
     return (
