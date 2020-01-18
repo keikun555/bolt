@@ -502,7 +502,8 @@ class BoltDB(object):
             for screw in pref_dict:
                 factor = 1.0 / sum(pref_dict[screw].itervalues())
                 for candidate in pref_dict[screw]:
-                    pref_dict[screw][candidate] = pref_dict[screw][candidate] *
+                    pref_dict[screw][candidate] = pref_dict[
+                        screw][candidate] * factor
             # calculate match scores
             match_scores = []
             screws = list(pref_dict.keys())
