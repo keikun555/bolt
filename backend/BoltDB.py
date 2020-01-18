@@ -314,7 +314,7 @@ class BoltDB(object):
         return driver_dict
 
     def approve_driver_request(self, request_id):
-        ''' given request id approve a driver request '''
+        ''' given request id approve a driver request returns approved request '''
         with self.Session() as session:
             query = session.query(DriverRequest).filter(
                 DriverRequest.id == request_id)
@@ -323,9 +323,11 @@ class BoltDB(object):
                 raise NotFoundException(
                     'BoltDB.approve_driver_request: request not found')
             request.active = False
+            request_dict = row2dict(request)
             screwdriver = Driver(screw=request.screw, driver=request.driver)
             session.add(screwdriver)
             session.commit()
+        return request_dict
 
     def cancel_driver_request(self, request_id):
         ''' given screw user id and driver user id cancels a driver request '''
@@ -338,6 +340,63 @@ class BoltDB(object):
                     'BoltDB.cancel_driver_request: request not found')
             request.active = False
             session.commit()
+
+    def is_screwdriver(self, screw, driver):
+        ''' verifies the screw driver relation '''
+        with self.Session() as session:
+            query = session.query(Driver.screw).filter(
+                sql.and_(
+                    Driver.driver == driver,
+                    Driver.screw == screw,
+                    Driver.cancelled == expr.false()
+                )
+            )
+            screw = query.first()
+        return screw is not None
+
+
+    def get_driver(self, screw):
+        ''' get driver of screw else return None '''
+        with self.Session() as session:
+            subq = (
+                session.query(
+                    expr.func.max(Driver.id).label('id')
+                ).filter(
+                    sql.and_(
+                        Driver.screw == screw,
+                        Driver.cancelled == expr.false()
+                    )
+                ).subquery()
+            )
+            query = session.query(Driver.driver).filter(Driver.id.in_(subq))
+            driver = query.first()
+            driver_dict = None
+            if driver is not None:
+                driver, = driver
+                driver_dict = self.get_user(driver)
+        return driver_dict
+
+    def get_screws(self, driver):
+        ''' get screws of driver '''
+        with self.Session() as session:
+            query = session.query(Driver.screw).filter(
+                sql.and_(
+                    Driver.driver == driver,
+                    Driver.cancelled == expr.false()
+                )
+            )
+            results = []
+            for screw in query.all():
+                s_dict = self.get_user(screw)
+                s_dict['match'] = self.get_match(screw)
+                results.append(s_dict)
+        return results
+
+    def get_screw(self, screw):
+        ''' get screw information '''
+        screw_dict = self.get_user(screw)
+        screw_dict['match'] = self.get_match(screw)
+        return screw_dict
 
     def get_driver(self, screw):
         ''' get driver of screw else return None '''

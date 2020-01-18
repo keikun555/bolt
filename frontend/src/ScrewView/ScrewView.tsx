@@ -28,6 +28,7 @@ const boltUserGridOptions = {
   defaultColDef: {
     resizable: true,
     sortable: true,
+    suppressMovable: true,
     filter: 'agTextColumnFilter',
   },
   columnDefs: [
@@ -59,6 +60,7 @@ const boltUserGridOptions = {
 
 export interface ScrewViewProps {
   user: User;
+  addScrew: (screw: User) => void;
 }
 export interface ScrewViewState {
   selectedUser: null | User;
@@ -93,7 +95,6 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
     axios
       .post(`user`)
       .then((response: AxiosResponse) => {
-        console.log(response.data);
         this.setState({users: response.data.users});
       })
       .catch((error: AxiosError) => console.log(error));
@@ -147,11 +148,13 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
       });
   }
   approveDriverRequest(r: DriverRequest) {
+    const {addScrew} = this.props;
     axios
       .post(`driver_request/${r.id}/approve`)
       .then((response: AxiosResponse) => {
         this.getData();
         this.getUsers();
+        addScrew(r.screw);
       })
       .catch((error: AxiosError) => {
         if (error.response && error.response.status === 404) {
@@ -308,6 +311,7 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
                 disabled={
                   selectedUser && selectedUser.id !== user.id ? false : true
                 }
+                color='blue'
                 onClick={() =>
                   user && selectedUser
                     ? this.makeDriverRequest(user, selectedUser)

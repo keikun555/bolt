@@ -129,20 +129,21 @@ def get_user(user_id):
     try:
         user = bdb.get_user(user_id)
     except NotFoundException as e:
-        return {
+        return ({
             'errors': {'user': 'not found'}
-        }, 404
+        }, 404)
     except Exception as e:
-        return {
+        return ({
             'errors': {'user': str(e)}
-        }, 404
+        }, 404)
+    user['errors'] = {}
     current_user_id = get_jwt_identity()
     if user_id == current_user_id:
         try:
             user['driver_requests'] = bdb.user_associated_driver_requests(
                 user_id)
         except Exception as e:
-            user['errors'] = {'driver_requests': str(e)}
+            user['errors']['driver_requests'] = str(e)
     return user, 200
 
 
@@ -171,21 +172,64 @@ def get_user(user_id):
 def get_driver(user_id):
     current_user_id = get_jwt_identity()
     if user_id != current_user_id:
-        return {
-            'errors': {'driver_requests': 'forbidden'}
-        }, 403
+        return ({
+            'errors': {'get_driver': 'forbidden'}
+        }, 403)
     bdb = get_bdb()
     try:
         driver = bdb.get_driver(user_id)
     except NotFoundException as e:
-        return {
-            'errors': {'driver': 'not found'}
-        }, 404
+        return ({
+            'errors': {'get_driver': 'driver not found'}
+        }, 404)
     except Exception as e:
-        return {
+        return ({
             'errors': {'get_driver': str(e)}
-        }, 404
-    return {'driver': driver}, 200
+        }, 404)
+    return {'driver': driver, 'errors': {'get_driver': None}}, 200
+
+
+@app.route('/user/<string:user_id>/screw', methods=['POST'])
+@as_json
+@jwt_required
+def get_screws(user_id):
+    current_user_id = get_jwt_identity()
+    if user_id != current_user_id:
+        return ({
+            'errors': {'get_screws': 'forbidden'}
+        }, 403)
+    bdb = get_bdb()
+    try:
+        screws = bdb.get_screws(user_id)
+    except Exception as e:
+        return ({
+            'errors': {'get_screws': str(e)}
+        }, 404)
+    return {'screws': screws, 'errors': {'get_screws': None}}, 200
+
+
+@app.route('/user/<string:driver_id>/screw/<string:screw_id>', methods=['POST'])
+@as_json
+@jwt_required
+def get_screw(driver_id, screw_id):
+    current_user_id = get_jwt_identity()
+    if driver_id != current_user_id:
+        return {
+            'errors': {'get_screw': 'forbidden'}
+        }, 403
+    bdb = get_bdb()
+    try:
+        if bdb.is_screwdriver(screw_id, driver_id):
+            screw = bdb.get_screw(screw_id)
+        else:
+            return ({
+                'errors': {'get_screw': 'forbidden'}
+            }, 403)
+    except Exception as e:
+        return ({
+            'errors': {'get_screw': str(e)}
+        }, 404)
+    return {'screw': screw, 'errors': {'get_screw': None}}, 200
 
 
 @app.route('/user/<string:user_id>/driver/cancel', methods=['POST'])
@@ -193,18 +237,24 @@ def get_driver(user_id):
 @jwt_required
 def cancel_driver(user_id):
     current_user_id = get_jwt_identity()
-    if user_id != current_user_id:
-        return {
-            'errors': {'cancel_driver': 'forbidden'}
-        }, 403
     bdb = get_bdb()
+    driver = bdb.get_driver(user_id)
+    if driver is None:
+        return ({
+            'errors': {'cancel_driver': 'forbidden'}
+        }, 403)
+    if current_user_id not in (user_id, driver['id']):
+        # only screw and driver can cancel
+        return ({
+            'errors': {'cancel_driver': 'forbidden'}
+        }, 403)
     try:
         driver = bdb.cancel_driver(user_id)
     except Exception as e:
-        return {
+        return ({
             'errors': {'cancel_driver': str(e)}
-        }, 404
-    return None, 200
+        }, 404)
+    return {'errors': {'cancel_driver': None}}, 200
 
 
 @app.route('/user', methods=['POST'])
@@ -213,7 +263,7 @@ def cancel_driver(user_id):
 def get_all_users():
     bdb = get_bdb()
     users = bdb.get_all_users()
-    return {'users': users}, 200
+    return {'users': users, 'errors': {'get_users': None}}, 200
 
 
 @app.route('/driver_request/make', methods=['POST'])
@@ -229,16 +279,23 @@ def make_driver_request():
         if user_id != form.data.get('screw'):
             # only the screw can make the request
             return {
-                'errors': {'driver_request': 'forbidden'}
-            }, 403
+                'errors': {'make_driver_request': 'forbidden'}
+            }, 200
+        if bdb.get_driver(form.data.get('screw')) is not None:
+            return {
+                'make_driver_request': 'You cannot make a driver request when you already have a driver!'
+            }, 200
         try:
-            driver_request = bdb.make_driver_request(form.data.get('screw'), form.data.get('driver'))
+            driver_request = bdb.make_driver_request(
+                form.data.get('screw'), form.data.get('driver'))
+            response['errors']['make_driver_request'] = None
         except NotUniqueException as e:
-            response['errors']['make_driver_request'] = 'You cannot have more than one driver request!'
+            response['errors'][
+                'make_driver_request'] = 'You cannot have more than one driver request!'
         except Exception as e:
             return {
-                'errors': {'new_driver_request': str(e)}
-            }, 404
+                'errors': {'make_driver_request': str(e)}
+            }, 200
     return response, 200
 
 
@@ -251,12 +308,12 @@ def get_driver_request(request_id):
         request = bdb.get_driver_request(request_id)
     except Exception as e:
         return {
-            'errors': {'driver_request': str(e)}
+            'errors': {'get_driver_request': str(e)}
         }, 404
     user_id = get_jwt_identity()
     if user_id not in (request['screw']['id'], request['driver']['id']):
         return {
-            'errors': {'driver_request': 'forbidden'}
+            'errors': {'get_driver_request': 'forbidden'}
         }, 403
     return request
 
@@ -271,7 +328,7 @@ def cancel_driver_request(request_id):
         request = bdb.get_driver_request(request_id)
     except Exception as e:
         return {
-            'errors': {'get_request': str(e)}
+            'errors': {'cancel_request': str(e)}
         }, 404
     user_id = get_jwt_identity()
     if user_id not in (request['screw']['id'], request['driver']['id']):
@@ -281,9 +338,10 @@ def cancel_driver_request(request_id):
     # cancel
     try:
         request = bdb.cancel_driver_request(request_id)
+        request['errors'] = {'cancel_request': None}
     except Exception as e:
         return {
-            'errors': {'cancel': str(e)}
+            'errors': {'cancel_request': str(e)}
         }, 404
     return request
 
@@ -292,14 +350,13 @@ def cancel_driver_request(request_id):
 @as_json
 @jwt_required
 def approve_driver_request(request_id):
-    print('Hello')
     bdb = get_bdb()
     # first check if its authorized
     try:
         request = bdb.get_driver_request(request_id)
     except Exception as e:
         return {
-            'errors': {'get_request': str(e)}
+            'errors': {'approve_request': str(e)}
         }, 404
     user_id = get_jwt_identity()
     if user_id != request['driver']['id']:
@@ -309,9 +366,10 @@ def approve_driver_request(request_id):
     # approve
     try:
         request = bdb.approve_driver_request(request_id)
+        request['errors'] = {'approve_request': None}
     except Exception as e:
         return {
-            'errors': {'approve': str(e)}
+            'errors': {'approve_request': str(e)}
         }, 404
     return request, 200
 
@@ -322,7 +380,7 @@ def approve_driver_request(request_id):
 def get_match(user_id):
     bdb = get_bdb()
     match = bdb.get_match(user_id)
-    return {'match': match}, 200
+    return {'match': match, 'errors': {'get_match': None}}, 200
 
 
 @app.route('/', defaults={'path': ''})

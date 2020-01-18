@@ -10,6 +10,7 @@ interface User {
   name: string;
   driver: User | null;
   matched: boolean;
+  match: User | undefined;
 }
 
 export default User;
