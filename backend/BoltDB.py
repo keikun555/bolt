@@ -148,7 +148,7 @@ class BoltDB(object):
                     expr.func.max(Couple.id).label('id')
                 ).filter(sql.and_(
                          Couple.user_1 == user_id,
-                         Couple.active == true()))
+                         Couple.active == expr.true()))
                         .group_by(Couple.user_1)  # trick is to add both (u1, u2) (u2, u1) pairs
                         .subquery()
             )
@@ -194,7 +194,7 @@ class BoltDB(object):
             c_subq1 = (
                 session.query(
                     expr.func.max(Couple.id).label('id')
-                ).filter(Couple.active == true())
+                ).filter(Couple.active == expr.true())
                     .group_by(Couple.user_1)  # trick is to add both (u1, u2) (u2, u1) pairs
                     .subquery()
             )
@@ -480,7 +480,7 @@ class BoltDB(object):
             m_subq = (
                 session.query(
                     Couple.user_1
-                ).filter(Couple.active == true())
+                ).filter(Couple.active == expr.true())
                 .subquery()
             )
             # preferences where candidates are not matched
@@ -548,11 +548,10 @@ class BoltDB(object):
                     sql.or_(
                         sql.and_(
                             Couple.user_1 == user_1,
-                            Couple.active == true(
-                            )),
+                            Couple.active == expr.true()),
                         sql.and_(
                             Couple.user_1 == user_2,
-                            Couple.active == true())
+                            Couple.active == expr.true())
                     )
                 )
             )
@@ -576,7 +575,7 @@ class BoltDB(object):
                 ).filter(
                     sql.and_(
                         Couple.user_1 == user_id,
-                        Couple.active == true())
+                        Couple.active == expr.true())
                 ).subquery()
             )
             query = session.query(Couple.user_2).filter(Couple.id.in_(subq))
@@ -595,11 +594,11 @@ class BoltDB(object):
                          sql.and_(
                          Couple.user_1 == user_1,
                          Couple.user_2 == user_2,
-                         Couple.active == true()),
+                         Couple.active == expr.true()),
                          sql.and_(
                          Couple.user_1 == user_2,
                          Couple.user_2 == user_1,
-                         Couple.active == true())
+                         Couple.active == expr.true())
                          ))
                     .group_by(Couple.user_1, Couple.user_2)
                     .subquery()
