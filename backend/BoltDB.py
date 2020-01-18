@@ -109,6 +109,20 @@ class BoltDB(object):
         except:
             raise NotFoundException('BoltDB.revoke_token: token not found')
 
+    def add_users(self, users):
+        ''' given list of dicts {'username', 'name', 'email'} adds to database if not exist '''
+        user_ids = [u['id'] for u in users]
+        with self.Session() as session:
+            query = (session.query(User.id).filter(User.id.in_(user_ids)))
+            existing_ids = [t[0] for t in query.all()]
+            new_users = list(
+                filter(lambda u: u['id'] not in existing_ids, users))
+            user_rows = [User(id=u['id'], name=u['name'], email=u['email'])
+                         for u in new_users]
+            session.bulk_save_objects(user_rows)
+            session.commit()
+            print('added {} users'.format(len(new_users)))
+
     def login(self, username, password):
         '''
         given username and password, login and return user info else return None
@@ -465,9 +479,10 @@ class BoltDB(object):
             session.flush()
             preference_rows = []
             for preference in preferences:
-                pref_row = Preference(screw=screw, candidate=preference[
-                                      'candidate'], preference=preference['preference'])
-                preference_rows.append(pref_row)
+                if screw != preference['candidate']:
+                    pref_row = Preference(screw=screw, candidate=preference[
+                                          'candidate'], preference=preference['preference'])
+                    preference_rows.append(pref_row)
             session.bulk_save_objects(preference_rows)
             pref_dicts = [row2dict(p) for p in preference_rows]
             session.commit()
