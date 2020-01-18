@@ -342,6 +342,7 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
                 <AgGridReact
                   {...boltUserGridOptions}
                   pagination
+                  paginationAutoPageSize
                   rowData={userRows}
                   onGridReady={params => {
                     this.userGrid = params.api;

@@ -336,6 +336,7 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
                   {...boltUserGridOptions}
                   rowData={userRows}
                   rowSelection="single"
+                  paginationAutoPageSize
                   onSelectionChanged={(params: any) => {
                     const selectedRows = params.api.getSelectedRows();
                     this.setState({
