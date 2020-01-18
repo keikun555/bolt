@@ -20,7 +20,7 @@ from flask_jwt_extended import (
 )
 
 from BoltDB import BoltDB, NotFoundException, NotUniqueException
-from forms import LoginForm, DriverRequestForm
+from forms import LoginForm, DriverRequestForm, PreferencesForm
 
 # make and configure Flask App
 app = Flask(__name__, static_folder='../frontend/build')
@@ -230,6 +230,60 @@ def get_screw(driver_id, screw_id):
             'errors': {'get_screw': str(e)}
         }, 404)
     return {'screw': screw, 'errors': {'get_screw': None}}, 200
+
+
+@app.route('/user/<string:driver_id>/screw/<string:screw_id>/preference', methods=['POST'])
+@as_json
+@jwt_required
+def get_preferences(driver_id, screw_id):
+    current_user_id = get_jwt_identity()
+    if driver_id != current_user_id:
+        return {
+            'errors': {'get_preferences': 'forbidden'}
+        }, 403
+    bdb = get_bdb()
+    try:
+        if bdb.is_screwdriver(screw_id, driver_id):
+            preferences = bdb.get_preferences(screw_id)
+        else:
+            return ({
+                'errors': {'get_preferences': 'forbidden'}
+            }, 403)
+    except Exception as e:
+        return ({
+            'errors': {'get_preferences': str(e)}
+        }, 404)
+    return {'preferences': preferences, 'errors': {'get_preferences': None}}, 200
+
+
+@app.route('/user/<string:driver_id>/screw/<string:screw_id>/preference/save', methods=['POST'])
+@as_json
+@jwt_required
+def save_preferences(driver_id, screw_id):
+    current_user_id = get_jwt_identity()
+    if driver_id != current_user_id:
+        return {
+            'errors': {'save_preferences': 'forbidden'}
+        }, 403
+    bdb = get_bdb()
+    try:
+        if bdb.is_screwdriver(screw_id, driver_id):
+            form = PreferencesForm(request.form)
+            form.validate()
+            if form.errors:
+                response = {'errors': form.errors}
+                return response, 400
+            bdb.save_preferences(screw_id, form.data.get('preference'))
+            preferences = bdb.get_preferences(screw_id)
+        else:
+            return ({
+                'errors': {'save_preferences': 'forbidden'}
+            }, 403)
+    except Exception as e:
+        return ({
+            'errors': {'save_preferences': str(e)}
+        }, 404)
+    return {'preferences': preferences, 'errors': {'save_preferences': None}}, 200
 
 
 @app.route('/user/<string:user_id>/driver/cancel', methods=['POST'])

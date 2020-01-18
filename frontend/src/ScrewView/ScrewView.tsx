@@ -175,7 +175,14 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
   }
   render() {
     const {user} = this.props;
-    const {driver, matched, driverRequests, users, selectedUser, errors} = this.state;
+    const {
+      driver,
+      matched,
+      driverRequests,
+      users,
+      selectedUser,
+      errors,
+    } = this.state;
     const userRows = users.map((u: User) =>
       Object.assign({}, u, {driver: u.driver ? u.driver.id : 'None'}),
     );
@@ -270,7 +277,7 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
                     <Grid.Column>
                       <Header as="h2">
                         {driver
-                          ? `Your driver is ${driver.name} (${driver.id})`
+                          ? `Your driver is ${driver.name.split(' ')[0]} (${driver.id})`
                           : "You don't have a driver!"}
                         {driver ? (
                           <Button
@@ -298,7 +305,7 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
           </Grid.Row>
           <Grid.Row columns={2}>
             <Grid.Column>
-              <Header as="h1">Bolt Users</Header>
+              <Header as="h1">Request a Driver!</Header>
             </Grid.Column>
             <Grid.Column>
               <Button floated="right" icon onClick={this.getUsers}>
@@ -306,12 +313,14 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
               </Button>
             </Grid.Column>
             <Grid.Column width={16}>
-              {errors.make_driver_request ? <Message error>{errors.make_driver_request}</Message> : null}
+              {errors.make_driver_request ? (
+                <Message error>{errors.make_driver_request}</Message>
+              ) : null}
               <Button
                 disabled={
                   selectedUser && selectedUser.id !== user.id ? false : true
                 }
-                color='blue'
+                color="blue"
                 onClick={() =>
                   user && selectedUser
                     ? this.makeDriverRequest(user, selectedUser)

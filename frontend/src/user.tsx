@@ -11,6 +11,7 @@ interface User {
   driver: User | null;
   matched: boolean;
   match: User | undefined;
+  preference: number | undefined;
 }
 
 export default User;

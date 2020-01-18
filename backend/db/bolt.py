@@ -1,5 +1,5 @@
 # coding: utf-8
-from sqlalchemy import Column, DateTime, ForeignKey, Index, String, text
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Index, String, text
 from sqlalchemy.dialects.mysql import INTEGER, TINYINT
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -32,10 +32,10 @@ class Couple(Base):
 class Driver(Base):
     __tablename__ = 'driver'
     __table_args__ = (
+        Index('driver', 'driver', 'timestamp'),
         Index('screw', 'screw', 'driver'),
         Index('screw_2', 'screw', 'driver'),
-        Index('screw_3', 'screw', 'timestamp'),
-        Index('driver', 'driver', 'timestamp')
+        Index('screw_3', 'screw', 'timestamp')
     )
 
     id = Column(INTEGER(11), primary_key=True)
@@ -59,6 +59,20 @@ class DriverRequest(Base):
 
     user = relationship('User', primaryjoin='DriverRequest.driver == User.id')
     user1 = relationship('User', primaryjoin='DriverRequest.screw == User.id')
+
+
+class Preference(Base):
+    __tablename__ = 'preference'
+
+    id = Column(INTEGER(11), primary_key=True)
+    screw = Column(ForeignKey('user.id'), nullable=False, index=True, comment='user id')
+    candidate = Column(ForeignKey('user.id'), nullable=False, index=True, comment='user id')
+    preference = Column(Float(asdecimal=True), nullable=False, comment='positive double')
+    active = Column(TINYINT(1), nullable=False, server_default=text("'1'"), comment='whether the preference is in effect')
+    timestamp = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
+
+    user = relationship('User', primaryjoin='Preference.candidate == User.id')
+    user1 = relationship('User', primaryjoin='Preference.screw == User.id')
 
 
 class Token(Base):

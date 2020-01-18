@@ -18,6 +18,7 @@ import {
 } from 'semantic-ui-react';
 
 import {AgGridReact} from 'ag-grid-react';
+import {GridApi} from 'ag-grid-community';
 
 import axios from '../boltAxios';
 import {AxiosResponse, AxiosError} from 'axios';
@@ -28,6 +29,7 @@ const savedGridOptions = {
   defaultColDef: {
     resizable: true,
     sortable: true,
+    suppressMovable: true,
     filter: 'agTextColumnFilter',
   },
   columnDefs: [
@@ -53,6 +55,14 @@ const savedGridOptions = {
         {
           headerName: 'Matched',
           field: 'matched',
+        },
+        {
+          headerName: 'Preference',
+          field: 'preference',
+          editable: true,
+          sort: 'asc',
+          headerTooltip: 'The greater the more preferred, must be >0',
+          filter: 'agNumberColumnFilter',
         },
       ],
     },
@@ -90,6 +100,12 @@ const boltUserGridOptions = {
           headerName: 'Matched',
           field: 'matched',
         },
+        {
+          headerName: 'Preference',
+          field: 'preference',
+          editable: true,
+          headerTooltip: 'The greater the more preferred, must be >0',
+        },
       ],
     },
   ],
@@ -105,22 +121,33 @@ export interface DriverViewProps {
 export interface DriverViewState {
   screw: User | null;
   users: User[];
+  preferences: User[];
   errors: {[key: string]: string};
 }
 
 class DriverView extends React.Component<DriverViewProps, DriverViewState> {
+  private savedGrid: GridApi | null = null;
+  private userGrid: GridApi | null = null;
   constructor(props: DriverViewProps) {
     super(props);
     this.state = {
       screw: null,
       users: [],
+      preferences: [],
       errors: {},
     };
+    this.getData = this.getData.bind(this);
     this.getUsers = this.getUsers.bind(this);
     this.getScrew = this.getScrew.bind(this);
+    this.getPreferences = this.getPreferences.bind(this);
+    this.savePreferences = this.savePreferences.bind(this);
     this.cancelDriver = this.cancelDriver.bind(this);
     this.getScrew();
+    this.getData();
+  }
+  getData() {
     this.getUsers();
+    this.getPreferences();
   }
   getUsers() {
     axios
@@ -145,6 +172,69 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
       })
       .catch((error: AxiosError) => console.log(error));
   }
+  getPreferences() {
+    axios
+      .post(
+        `user/${this.props.driver.id}/screw/${this.props.screw_id}/preference`,
+      )
+      .then((response: AxiosResponse) => {
+        if ('errors' in response.data) {
+          this.setState(({errors}) => ({
+            errors: Object.assign({}, errors, response.data.errors),
+          }));
+        }
+        if ('preferences' in response.data) {
+          this.setState({preferences: response.data.preferences});
+        }
+      })
+      .catch((error: AxiosError) => console.log(error));
+  }
+  savePreferences() {
+    const formData = new FormData();
+    const candidates: {[key: string]: number} = {};
+    const {savedGrid, userGrid} = this;
+    if (userGrid) {
+      userGrid.forEachNode(node => {
+        const {id, preference} = node.data;
+        if (preference && Number(preference) > 0) {
+          candidates[id] = preference;
+        }
+      });
+    }
+    if (savedGrid) {
+      savedGrid.forEachNode(node => {
+        const {id, preference} = node.data;
+        if (preference && Number(preference) > 0) {
+          candidates[id] = Number(preference);
+        }
+      });
+    }
+    for (const [key, value] of Object.entries(candidates)) {
+      let temp = {
+        candidate: key,
+        preference: value,
+      };
+      console.log(JSON.stringify(temp));
+      formData.append('preference', JSON.stringify(temp));
+    }
+    axios
+      .post(
+        `user/${this.props.driver.id}/screw/${this.props.screw_id}/preference/save`,
+        formData,
+      )
+      .then((response: AxiosResponse) => {
+        if ('errors' in response.data) {
+          console.log(response.data.errors);
+          this.setState(({errors}) => ({
+            errors: Object.assign({}, errors, response.data.errors),
+          }));
+        }
+        if ('preferences' in response.data) {
+          this.setState({preferences: response.data.preferences});
+        }
+      })
+      .catch((error: AxiosError) => console.log(error));
+  }
   cancelDriver() {
     const {screw_id, removeScrew} = this.props;
     axios
@@ -156,10 +246,16 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
   }
   render() {
     const {screw_id} = this.props;
-    const {screw, users, errors} = this.state;
-    const userRows = users.map((u: User) =>
+    const {screw, users, errors, preferences} = this.state;
+    const savedRows = preferences.map((u: User) =>
       Object.assign({}, u, {driver: u.driver ? u.driver.id : 'None'}),
     );
+    const savedUsers = preferences.map((u: User) => u.id);
+    const userRows = users
+      .filter(u => !savedUsers.includes(u.id))
+      .map(u =>
+        Object.assign({}, u, {driver: u.driver ? u.driver.id : 'None'}),
+      );
     return (
       <Container>
         <Grid stackable divided="vertically">
@@ -204,10 +300,12 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
           </Grid.Row>
           <Grid.Row columns={2}>
             <Grid.Column>
-              <Header as="h1">Bolt Users</Header>
+              <Header as="h1">
+                {`${screw ? screw.name.split(' ')[0] : screw_id}'s Preferences`}
+              </Header>
             </Grid.Column>
             <Grid.Column>
-              <Button floated="right" icon onClick={this.getUsers}>
+              <Button floated="right" icon onClick={this.getData}>
                 <Icon name="refresh" />
               </Button>
             </Grid.Column>
@@ -215,13 +313,22 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
               {errors.save_preferences ? (
                 <Message error>{errors.save_preferences}</Message>
               ) : null}
-              <Button color="blue" attached="top">
+              <Button
+                color="blue"
+                attached="top"
+                onClick={this.savePreferences}>
                 Save preferences
               </Button>
               <div
                 className="ag-theme-balham"
                 style={{height: '200px', width: '100%'}}>
-                <AgGridReact {...savedGridOptions} rowData={userRows} />
+                <AgGridReact
+                  {...savedGridOptions}
+                  rowData={savedRows}
+                  onGridReady={params => {
+                    this.savedGrid = params.api;
+                  }}
+                />
               </div>
               <div
                 className="ag-theme-balham"
@@ -230,6 +337,9 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
                   {...boltUserGridOptions}
                   pagination
                   rowData={userRows}
+                  onGridReady={params => {
+                    this.userGrid = params.api;
+                  }}
                 />
               </div>
             </Grid.Column>
