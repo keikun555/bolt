@@ -317,7 +317,7 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
                 color="blue"
                 attached="top"
                 onClick={this.savePreferences}>
-                Save preferences
+                Save Preferences
               </Button>
               <div
                 className="ag-theme-balham"
@@ -349,9 +349,9 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
               <Button
                 color="red"
                 fluid
-                onClick={this.cancelDriver}>{`Stop being ${
+                onClick={this.cancelDriver}>{`Stop Being ${
                 screw ? screw.name.split(' ')[0] : screw_id
-              }'s driver`}</Button>
+              }'s Driver`}</Button>
             </Grid.Column>
           </Grid.Row>
         </Grid>
