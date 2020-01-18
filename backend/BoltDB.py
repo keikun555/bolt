@@ -354,7 +354,6 @@ class BoltDB(object):
             screw = query.first()
         return screw is not None
 
-
     def get_driver(self, screw):
         ''' get driver of screw else return None '''
         with self.Session() as session:
@@ -433,6 +432,45 @@ class BoltDB(object):
             for driver in query.all():
                 driver.cancelled = True
             session.commit()
+
+    def get_preferences(self, screw):
+        ''' given screw, return their preferences '''
+        with self.Session() as session:
+            query = (
+                session.query(User,
+                              Preference.preference)
+                    .join(Preference,
+                          User.id == Preference.candidate)
+                    .filter(sql.and_(Preference.screw == screw,
+                                     Preference.active == expr.true()))
+            )
+            candidates = []
+            for candidate, preference in query.all():
+                cand_dict = row2dict(candidate)
+                cand_dict['preference'] = str(round(preference, 2))
+                candidates.append(cand_dict)
+        return candidates
+
+    def save_preferences(self, screw, preferences):
+        ''' save preferences for a screw '''
+        with self.Session() as session:
+            query = (
+                session.query(Preference)
+                    .filter(sql.and_(Preference.screw == screw,
+                                     Preference.active == expr.true()))
+            )
+            for preference in query:
+                preference.active = False
+            session.flush()
+            preference_rows = []
+            for preference in preferences:
+                pref_row = Preference(screw=screw, candidate=preference[
+                                      'candidate'], preference=preference['preference'])
+                preference_rows.append(pref_row)
+                session.bulk_save_objects(preference_rows)
+            pref_dicts = [row2dict(p) for p in preference_rows]
+            session.commit()
+        return pref_dicts
 
     def set_match(self, user_1, user_2):
         ''' add a match '''
