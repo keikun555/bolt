@@ -22,7 +22,8 @@ class Couple(Base):
     id = Column(INTEGER(11), primary_key=True)
     user_1 = Column(ForeignKey('user.id'), nullable=False, index=True)
     user_2 = Column(ForeignKey('user.id'), nullable=False, index=True)
-    cancelled = Column(TINYINT(1), nullable=False, server_default=text("'0'"))
+    score = Column(Float(asdecimal=True), nullable=False)
+    active = Column(TINYINT(1), nullable=False, server_default=text("'1'"))
     timestamp = Column(DateTime, nullable=False, server_default=text("CURRENT_TIMESTAMP"))
 
     user = relationship('User', primaryjoin='Couple.user_1 == User.id')
@@ -32,10 +33,10 @@ class Couple(Base):
 class Driver(Base):
     __tablename__ = 'driver'
     __table_args__ = (
-        Index('driver', 'driver', 'timestamp'),
         Index('screw', 'screw', 'driver'),
         Index('screw_2', 'screw', 'driver'),
-        Index('screw_3', 'screw', 'timestamp')
+        Index('screw_3', 'screw', 'timestamp'),
+        Index('driver', 'driver', 'timestamp')
     )
 
     id = Column(INTEGER(11), primary_key=True)
@@ -78,10 +79,10 @@ class Preference(Base):
 class Token(Base):
     __tablename__ = 'token'
     __table_args__ = (
-        Index('token_4', 'token', 'expiration'),
-        Index('id', 'id', 'token'),
         Index('token', 'token', 'user_id'),
-        Index('token_2', 'token', 'user_id')
+        Index('token_2', 'token', 'user_id'),
+        Index('token_4', 'token', 'expiration'),
+        Index('id', 'id', 'token')
     )
 
     id = Column(INTEGER(11), primary_key=True)

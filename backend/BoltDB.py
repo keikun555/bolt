@@ -6,6 +6,7 @@ Bolt Database Interface
 
 import pdb
 import datetime
+from collections import defaultdict
 from contextlib import contextmanager
 import sqlalchemy as sql
 from sqlalchemy import create_engine
@@ -147,7 +148,7 @@ class BoltDB(object):
                     expr.func.max(Couple.id).label('id')
                 ).filter(sql.and_(
                          Couple.user_1 == user_id,
-                         Couple.cancelled == expr.false()))
+                         Couple.active == true()))
                         .group_by(Couple.user_1)  # trick is to add both (u1, u2) (u2, u1) pairs
                         .subquery()
             )
@@ -193,7 +194,7 @@ class BoltDB(object):
             c_subq1 = (
                 session.query(
                     expr.func.max(Couple.id).label('id')
-                ).filter(Couple.cancelled == expr.false())
+                ).filter(Couple.active == true())
                     .group_by(Couple.user_1)  # trick is to add both (u1, u2) (u2, u1) pairs
                     .subquery()
             )
@@ -467,12 +468,71 @@ class BoltDB(object):
                 pref_row = Preference(screw=screw, candidate=preference[
                                       'candidate'], preference=preference['preference'])
                 preference_rows.append(pref_row)
-                session.bulk_save_objects(preference_rows)
+            session.bulk_save_objects(preference_rows)
             pref_dicts = [row2dict(p) for p in preference_rows]
             session.commit()
         return pref_dicts
 
-    def set_match(self, user_1, user_2):
+    def make_matches(self):
+        ''' make the matches with the current preferences '''
+        with self.Session() as session:
+            # fetch already matched ones
+            m_subq = (
+                session.query(
+                    Couple.user_1
+                ).filter(Couple.active == true())
+                .subquery()
+            )
+            # preferences where candidates are not matched
+            query = (
+                session.query(
+                    Preference.screw,
+                    Preference.candidate,
+                    Preference.preference,
+                )
+                .filter(sql.and_(Preference.active == expr.true(),
+                                 ~Preference.candidate.in_(m_subq)))
+            )
+            # better data structure
+            pref_dict = defaultdict(lambda: defaultdict(float))
+            for screw, candidate, preference in query.all():
+                if screw != candidate:
+                    pref_dict[screw][candidate] = preference
+            # normalize preferences
+            for screw in pref_dict:
+                factor = 1.0 / sum(pref_dict[screw].itervalues())
+                for candidate in pref_dict[screw]:
+                    pref_dict[screw][candidate] = pref_dict[screw][candidate] *
+            # calculate match scores
+            match_scores = []
+            screws = list(pref_dict.keys())
+            for i in range(len(screws) - 1):
+                for j in range(i + 1, len(screws)):
+                    user_1 = screws[i]
+                    user_2 = screws[j]
+                    score = pref_dict[user_1][
+                        user_2] + pref_dict[user_2][user_1]
+                    if score > 0:
+                        match_score = (user_1, user_2, score)
+                        match_scores.append(match_score)
+            # sort descending order of scores
+            match_scores = sorted(
+                match_scores, key=lambda t: t[2], reverse=True)
+            # make matches
+            matched = set()
+            matches = []
+            for user_1, user_2, score in match_scores:
+                if user_1 not in matched and user_2 not in matched:
+                    matches.append((user_1, user_2, score / 2.0))
+                                   # / 2.0 to make score in [0,1]
+                    matched.add(user_1)
+                    matched.add(user_2)
+            couples = [Couple(user_1=u1, user_2=u2, score=s)
+                       for (u1, u2, s) in matches]
+            session.bulk_save_objects(couples)
+            session.commit()
+
+    def make_match(self, user_1, user_2):
         ''' add a match '''
         if user_1 == user_2:
             raise Exception(
@@ -487,11 +547,11 @@ class BoltDB(object):
                     sql.or_(
                         sql.and_(
                             Couple.user_1 == user_1,
-                            Couple.cancelled == expr.false(
+                            Couple.active == true(
                             )),
                         sql.and_(
                             Couple.user_1 == user_2,
-                            Couple.cancelled == expr.false())
+                            Couple.active == true())
                     )
                 )
             )
@@ -515,7 +575,7 @@ class BoltDB(object):
                 ).filter(
                     sql.and_(
                         Couple.user_1 == user_id,
-                        Couple.cancelled == expr.false())
+                        Couple.active == true())
                 ).subquery()
             )
             query = session.query(Couple.user_2).filter(Couple.id.in_(subq))
@@ -534,11 +594,11 @@ class BoltDB(object):
                          sql.and_(
                          Couple.user_1 == user_1,
                          Couple.user_2 == user_2,
-                         Couple.cancelled == expr.false()),
+                         Couple.active == true()),
                          sql.and_(
                          Couple.user_1 == user_2,
                          Couple.user_2 == user_1,
-                         Couple.cancelled == expr.false())
+                         Couple.active == true())
                          ))
                     .group_by(Couple.user_1, Couple.user_2)
                     .subquery()
