@@ -184,7 +184,7 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
       errors,
     } = this.state;
     const userRows = users.map((u: User) =>
-      Object.assign({}, u, {driver: u.driver ? u.driver.id : 'None'}),
+      Object.assign({}, u, {driver: u.driver ? u.driver.id : 'None', matched: u.matched ? 'Yes &hearts;' : 'Nope'}),
     );
     const requestElements = driverRequests.map(
       (r: DriverRequest, i: number) => {
@@ -221,11 +221,11 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
                       {`${r.driver.name} (${r.driver.id}) wants you to be their driver!`}
                       <Button.Group compact floated="right">
                         <Button onClick={() => this.approveDriverRequest(r)}>
-                          Approve
+                          Sure!
                         </Button>
                         <Button.Or />
                         <Button onClick={() => this.cancelDriverRequest(r)}>
-                          Deny
+                          Nope
                         </Button>
                       </Button.Group>
                     </Header>

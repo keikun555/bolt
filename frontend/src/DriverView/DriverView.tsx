@@ -248,13 +248,19 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
     const {screw_id} = this.props;
     const {screw, users, errors, preferences} = this.state;
     const savedRows = preferences.map((u: User) =>
-      Object.assign({}, u, {driver: u.driver ? u.driver.id : 'None'}),
+      Object.assign({}, u, {
+        driver: u.driver ? u.driver.id : 'None',
+        matched: u.matched ? 'Yes &hearts;' : 'Nope',
+      }),
     );
     const savedUsers = preferences.map((u: User) => u.id);
     const userRows = users
       .filter(u => !savedUsers.includes(u.id))
       .map(u =>
-        Object.assign({}, u, {driver: u.driver ? u.driver.id : 'None'}),
+        Object.assign({}, u, {
+          driver: u.driver ? u.driver.id : 'None',
+          matched: u.matched ? 'Yes &hearts;' : 'Nope',
+        }),
       );
     return (
       <Container>
