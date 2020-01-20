@@ -259,7 +259,7 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
       .filter(u => !savedUsers.includes(u.id))
       .map(u =>
         Object.assign({}, u, {
-          driver: u.driver ? u.driver.id : 'None',
+          driver: u.driver ? u.driver.id : 'No one...yet',
           matched: u.matched ? `Yes ${'\u2764'}` : 'Nope',
         }),
       );
