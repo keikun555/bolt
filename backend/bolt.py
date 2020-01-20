@@ -34,7 +34,9 @@ app.config['JWT_REFRESH_TOKEN_EXPIRES'] = REFRESH_EXPIRES
 app.config['JWT_BLACKLIST_ENABLED'] = True
 app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access', 'refresh']
 FlaskJSON(app)
-CORS(app)  # TODO remove for production
+if(app.config['ENV'] == 'development'):
+    # only allow CORS for development
+    CORS(app)
 jwt = JWTManager(app)
 
 
