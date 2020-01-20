@@ -76,6 +76,7 @@ const boltUserGridOptions = {
     sortable: true,
     filter: 'agTextColumnFilter',
   },
+  floatingFilter: true,
   columnDefs: [
     {
       headerName: 'Bolt Users',
@@ -249,7 +250,7 @@ class DriverView extends React.Component<DriverViewProps, DriverViewState> {
     const {screw, users, errors, preferences} = this.state;
     const savedRows = preferences.map((u: User) =>
       Object.assign({}, u, {
-        driver: u.driver ? u.driver.id : 'None',
+        driver: u.driver ? u.driver.id : 'No one...yet',
         matched: u.matched ? `Yes ${'\u2764'}` : 'Nope',
       }),
     );

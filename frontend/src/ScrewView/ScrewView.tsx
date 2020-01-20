@@ -31,6 +31,7 @@ const boltUserGridOptions = {
     suppressMovable: true,
     filter: 'agTextColumnFilter',
   },
+  floatingFilter: true,
   columnDefs: [
     {
       headerName: 'Name',
@@ -184,7 +185,7 @@ class ScrewView extends React.Component<ScrewViewProps, ScrewViewState> {
       errors,
     } = this.state;
     const userRows = users.map((u: User) =>
-      Object.assign({}, u, {driver: u.driver ? u.driver.id : 'None', matched: u.matched ? `Yes ${'\u2764'}` : 'Nope'}),
+      Object.assign({}, u, {driver: u.driver ? u.driver.id : 'No one...yet', matched: u.matched ? `Yes ${'\u2764'}` : 'Nope'}),
     );
     const requestElements = driverRequests.map(
       (r: DriverRequest, i: number) => {
