@@ -7,6 +7,10 @@
 import {AxiosResponse, AxiosError} from 'axios';
 
 const axios = require('axios').default.create({
+  headers: {
+    'Access-Control-Allow-Origin':
+      process.env.NODE_ENV === 'production' ? 'null' : '*',
+  },
   baseURL:
     process.env.NODE_ENV === 'production' ? '/' : 'http://127.0.0.1:5000/',
   timeout: 5000,
